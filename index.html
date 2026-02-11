@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SOLOLA PLAYER</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{
+    margin:0;
+    font-family:Arial, sans-serif;
+    background:#0f172a;
+    color:white;
+    text-align:center;
+}
+.container{
+    padding:20px;
+}
+input{
+    width:90%;
+    padding:12px;
+    margin:10px 0;
+    border:none;
+    border-radius:8px;
+}
+button{
+    padding:12px 20px;
+    border:none;
+    border-radius:8px;
+    background:#f97316;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+    margin:5px;
+}
+video{
+    width:100%;
+    margin-top:20px;
+}
+.hidden{
+    display:none;
+}
+.status{
+    margin-top:10px;
+    font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container" id="authSection">
+    <h2>SOLOLA PLAYER</h2>
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Mot de passe (min 6 caractères)">
+    <br>
+    <button onclick="register()">S'inscrire</button>
+    <button onclick="login()">Se connecter</button>
+</div>
+
+<div class="container hidden" id="playerSection">
+    <h2>Lecteur IPTV</h2>
+    <input type="text" id="streamLink" placeholder="Collez un lien direct .m3u8 ou .mp4">
+    <br>
+    <button onclick="loadStream()">Lire</button>
+    <button onclick="logout()">Déconnexion</button>
+    <div class="status" id="status"></div>
+    <video id="videoPlayer" controls></video>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } 
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, set, get } 
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDzLgGrf0RiRtaRXsN12Z2vraxHfhQ2R34",
+  authDomain: "solola-player.firebaseapp.com",
+  databaseURL: "https://solola-player-default-rtdb.firebaseio.com",
+  projectId: "solola-player",
+  storageBucket: "solola-player.firebasestorage.app",
+  messagingSenderId: "223394614792",
+  appId: "1:223394614792:web:3a3084215edbc62a0bcbbd"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+window.register = function(){
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+
+    if(password.length < 6){
+        alert("Mot de passe trop court !");
+        return;
+    }
+
+    createUserWithEmailAndPassword(auth,email,password)
+    .then((userCredential)=>{
+        const user = userCredential.user;
+
+        const expireDate = new Date();
+        expireDate.setDate(expireDate.getDate()+7);
+
+        set(ref(db,"users/"+user.uid),{
+            subscription:"active",
+            expire:expireDate.toISOString()
+        });
+
+        alert("Compte créé avec 7 jours gratuits !");
+    })
+    .catch(error=>alert(error.message));
+}
+
+window.login = function(){
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+
+    signInWithEmailAndPassword(auth,email,password)
+    .catch(error=>alert(error.message));
+}
+
+window.logout = function(){
+    signOut(auth);
+}
+
+onAuthStateChanged(auth,(user)=>{
+    if(user){
+        document.getElementById("authSection").classList.add("hidden");
+        document.getElementById("playerSection").classList.remove("hidden");
+
+        const userRef = ref(db,"users/"+user.uid);
+
+        get(userRef).then(snapshot=>{
+            if(snapshot.exists()){
+                const data = snapshot.val();
+                const now = new Date();
+                const expire = new Date(data.expire);
+
+                if(now > expire){
+                    document.getElementById("status").innerText="Abonnement expiré";
+                    document.getElementById("streamLink").disabled=true;
+                }else{
+                    document.getElementById("status").innerText="Abonnement actif";
+                }
+            }
+        });
+
+    }else{
+        document.getElementById("authSection").classList.remove("hidden");
+        document.getElementById("playerSection").classList.add("hidden");
+    }
+});
+
+window.loadStream = function(){
+    const link = document.getElementById("streamLink").value;
+    const video = document.getElementById("videoPlayer");
+    video.src = link;
+}
+</script>
+
+</body>
+</html>
