@@ -1,164 +1,149 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>SOLOLA PLAYER</title>
+<title>SOLOLA PLAYER PRO</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
 <style>
 body{
     margin:0;
-    font-family:Arial, sans-serif;
-    background:#0f172a;
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg,#0f172a,#020617);
     color:white;
-    text-align:center;
 }
+
+header{
+    padding:20px;
+    font-size:22px;
+    font-weight:bold;
+    text-align:center;
+    background:rgba(255,255,255,0.05);
+    backdrop-filter: blur(10px);
+}
+
 .container{
     padding:20px;
+    max-width:900px;
+    margin:auto;
 }
+
+.input-box{
+    display:flex;
+    gap:10px;
+    margin-bottom:20px;
+}
+
 input{
-    width:90%;
+    flex:1;
     padding:12px;
-    margin:10px 0;
+    border-radius:10px;
     border:none;
-    border-radius:8px;
 }
+
 button{
-    padding:12px 20px;
+    padding:12px 18px;
     border:none;
-    border-radius:8px;
+    border-radius:10px;
     background:#f97316;
     color:white;
     font-weight:bold;
     cursor:pointer;
-    margin:5px;
 }
+
+button:hover{
+    background:#ea580c;
+}
+
 video{
     width:100%;
+    border-radius:15px;
     margin-top:20px;
+    background:black;
 }
-.hidden{
-    display:none;
+
+.channel-list{
+    margin-top:20px;
+    display:grid;
+    grid-template-columns: repeat(auto-fill,minmax(200px,1fr));
+    gap:10px;
 }
-.status{
-    margin-top:10px;
-    font-weight:bold;
+
+.channel{
+    background:rgba(255,255,255,0.05);
+    padding:10px;
+    border-radius:10px;
+    cursor:pointer;
+    transition:0.3s;
+}
+
+.channel:hover{
+    background:#f97316;
 }
 </style>
 </head>
 
 <body>
 
-<div class="container" id="authSection">
-    <h2>SOLOLA PLAYER</h2>
-    <input type="email" id="email" placeholder="Email">
-    <input type="password" id="password" placeholder="Mot de passe (min 6 caractères)">
-    <br>
-    <button onclick="register()">S'inscrire</button>
-    <button onclick="login()">Se connecter</button>
+<header>SOLOLA PLAYER PRO</header>
+
+<div class="container">
+
+<div class="input-box">
+    <input type="text" id="playlistUrl" placeholder="Collez lien .m3u8 ou .m3u">
+    <button onclick="loadPlaylist()">Charger</button>
 </div>
 
-<div class="container hidden" id="playerSection">
-    <h2>Lecteur IPTV</h2>
-    <input type="text" id="streamLink" placeholder="Collez un lien direct .m3u8 ou .mp4">
-    <br>
-    <button onclick="loadStream()">Lire</button>
-    <button onclick="logout()">Déconnexion</button>
-    <div class="status" id="status"></div>
-    <video id="videoPlayer" controls></video>
+<video id="video" controls></video>
+
+<div class="channel-list" id="channels"></div>
+
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } 
-from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getDatabase, ref, set, get } 
-from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+<script>
+function playStream(url){
+    const video = document.getElementById('video');
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDzLgGrf0RiRtaRXsN12Z2vraxHfhQ2R34",
-  authDomain: "solola-player.firebaseapp.com",
-  databaseURL: "https://solola-player-default-rtdb.firebaseio.com",
-  projectId: "solola-player",
-  storageBucket: "solola-player.firebasestorage.app",
-  messagingSenderId: "223394614792",
-  appId: "1:223394614792:web:3a3084215edbc62a0bcbbd"
-};
+    if(Hls.isSupported() && url.includes(".m3u8")){
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(video);
+    }else{
+        video.src = url;
+    }
+}
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
+function loadPlaylist(){
+    const url = document.getElementById("playlistUrl").value;
 
-window.register = function(){
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
-
-    if(password.length < 6){
-        alert("Mot de passe trop court !");
+    if(url.endsWith(".m3u8")){
+        playStream(url);
         return;
     }
 
-    createUserWithEmailAndPassword(auth,email,password)
-    .then((userCredential)=>{
-        const user = userCredential.user;
+    fetch(url)
+    .then(res=>res.text())
+    .then(text=>{
+        const lines = text.split("\n");
+        const channelContainer = document.getElementById("channels");
+        channelContainer.innerHTML = "";
 
-        const expireDate = new Date();
-        expireDate.setDate(expireDate.getDate()+7);
+        for(let i=0;i<lines.length;i++){
+            if(lines[i].startsWith("#EXTINF")){
+                const name = lines[i].split(",")[1];
+                const stream = lines[i+1];
 
-        set(ref(db,"users/"+user.uid),{
-            subscription:"active",
-            expire:expireDate.toISOString()
-        });
+                const div = document.createElement("div");
+                div.className = "channel";
+                div.innerText = name;
+                div.onclick = ()=> playStream(stream);
 
-        alert("Compte créé avec 7 jours gratuits !");
-    })
-    .catch(error=>alert(error.message));
-}
-
-window.login = function(){
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
-
-    signInWithEmailAndPassword(auth,email,password)
-    .catch(error=>alert(error.message));
-}
-
-window.logout = function(){
-    signOut(auth);
-}
-
-onAuthStateChanged(auth,(user)=>{
-    if(user){
-        document.getElementById("authSection").classList.add("hidden");
-        document.getElementById("playerSection").classList.remove("hidden");
-
-        const userRef = ref(db,"users/"+user.uid);
-
-        get(userRef).then(snapshot=>{
-            if(snapshot.exists()){
-                const data = snapshot.val();
-                const now = new Date();
-                const expire = new Date(data.expire);
-
-                if(now > expire){
-                    document.getElementById("status").innerText="Abonnement expiré";
-                    document.getElementById("streamLink").disabled=true;
-                }else{
-                    document.getElementById("status").innerText="Abonnement actif";
-                }
+                channelContainer.appendChild(div);
             }
-        });
-
-    }else{
-        document.getElementById("authSection").classList.remove("hidden");
-        document.getElementById("playerSection").classList.add("hidden");
-    }
-});
-
-window.loadStream = function(){
-    const link = document.getElementById("streamLink").value;
-    const video = document.getElementById("videoPlayer");
-    video.src = link;
+        }
+    })
 }
 </script>
 
